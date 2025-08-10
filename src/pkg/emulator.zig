@@ -1,17 +1,20 @@
 const std = @import("std");
 const Cartridge = @import("cartridge.zig").Cartridge;
 const Cpu = @import("cpu.zig").Cpu;
-const MMU = @import("mmu.zig").MMU;
+const Mmu = @import("mmu.zig").Mmu;
 const Ppu = @import("ppu.zig").Ppu;
+const Apu = @import("apu.zig").Apu;
+const interrupt = @import("interrupt.zig");
 
 pub const LCD_WIDTH: usize = 160;
 pub const LCD_HEIGHT: usize = 144;
 
 pub const Emulator = struct {
     cart: Cartridge,
-    mmu: MMU,
+    mmu: Mmu,
     cpu: Cpu,
     ppu: Ppu,
+    apu: Apu,
     // Simple RGBA8 framebuffer
     fb: [LCD_WIDTH * LCD_HEIGHT]u32,
     t_accum: f64,
@@ -20,14 +23,18 @@ pub const Emulator = struct {
         _ = allocator; // unused for now
         var emu = Emulator{
             .cart = cart,
-            .mmu = MMU.init(cart),
-            .cpu = .{},
-            .ppu = .{},
+            .mmu = undefined,
+            .cpu = undefined,
+            .ppu = undefined,
+            .apu = undefined,
             .fb = undefined,
             .t_accum = 0,
         };
-        emu.cpu.reset();
+        emu.mmu = Mmu.init(&emu.cart);
+        emu.cpu = Cpu.init(&emu.mmu);
+        emu.ppu = Ppu.init(&emu.mmu, &emu.fb);
         emu.ppu.reset();
+    emu.apu = Apu.init();
         // Fill with a test pattern
         for (0..LCD_HEIGHT) |y| {
             for (0..LCD_WIDTH) |x| {
@@ -42,9 +49,8 @@ pub const Emulator = struct {
     }
 
     pub fn deinit(self: *Emulator, allocator: std.mem.Allocator) void {
-        _ = allocator; // nothing to free yet
-        // Note: cart memory owned by Emulator? Here we borrowed; the caller will free it.
-        _ = self;
+        _ = allocator;
+        self.cart.deinit();
     }
 
     pub fn step(self: *Emulator, dt_sec: f64) !void {
@@ -52,13 +58,13 @@ pub const Emulator = struct {
         const cycles_to_run: u32 = @intFromFloat(dt_sec * 4_194_304.0);
         var spent: u32 = 0;
         while (spent < cycles_to_run) {
-            const c = self.cpu.step(&self.mmu);
+            const c = self.cpu.step();
+            if (self.mmu.timer.step(c)) self.mmu.requestInterrupt(interrupt.IF_TIMER);
             self.ppu.step(c);
+            self.apu.step(c);
             spent += c;
         }
         self.t_accum += dt_sec;
-        // Render placeholder pattern into fb for now
-        Ppu.renderTestPattern(&self.fb, self.t_accum);
     }
 
     pub fn framebuffer(self: *Emulator) []const u32 {

@@ -4,8 +4,12 @@ A starter Game Boy emulator written in Zig. It opens a window via SDL2, loads a 
 
 ## Features
 - SDL2 windowed app with a software RGBA framebuffer
-- ROM loader and basic cartridge struct
-- Emulator skeleton with a `step()` loop and `framebuffer()`
+- ROM loader with MBC0/MBC1/MBC3/MBC5 switching (baseline)
+- MMU with VRAM/WRAM/OAM/HRAM/IO and IF/IE
+- Timers (DIV/TIMA/TMA/TAC) with Timer interrupt
+- Joypad register (0xFF00) with keyboard mapping
+- PPU (DMG) background rendering, STAT/LY timing, VBlank interrupt
+- CPU core scaffold with common ops, interrupts (subset; grows over time)
 
 ## Requirements
 - Zig 0.13+
@@ -22,6 +26,13 @@ zig build
 zig build run -- <path-to-rom.gb>
 ```
 
+Controls (default):
+- D-Pad: Arrow keys
+- A: Z
+- B: X
+- Start: Enter
+- Select: Right Shift
+
 Example on macOS:
 
 ```
@@ -29,12 +40,11 @@ zig build run -- ~/ROMs/Tetris.gb
 ```
 
 ## Next Steps
-- Implement the LR35902 CPU (Z80-ish) with instruction decoding and flags
-- Add a memory bus and MMU: ROM, VRAM, WRAM, OAM, HRAM, IO regs, interrupts
-- Implement PPU pipeline (modes, OAM scan, tile fetch, FIFOs) and LCD timings
-- Add joypad input mapping and key handling
-- Implement timers and DIV/TIMA behavior
-- Optional: audio (APU), save file support (battery-backed RAM), MBCs
+- Expand CPU opcode coverage (full CB set, all loads/ALU/jumps/stack, DAA, STOP/HALT edge cases)
+- Complete PPU: window, sprites/OAM, STAT conditions, and timing precision
+- Implement serial and more accurate timer-edge behavior
+- Persist save RAM for battery-backed carts
+- Optional: audio (APU) and CGB features
 
 ## Notes
 - This is a WIP scaffold. It renders a test pattern so you can verify the window and texture upload path.

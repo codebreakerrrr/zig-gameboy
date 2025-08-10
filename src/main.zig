@@ -6,6 +6,7 @@ const sdl = @cImport({
 const Cartridge = @import("pkg/cartridge.zig").Cartridge;
 const Emulator = @import("pkg/emulator.zig").Emulator;
 const Renderer = @import("pkg/renderer.zig").Renderer;
+const Joypad = @import("pkg/joypad.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -24,7 +25,6 @@ pub fn main() !void {
 
     // Load ROM from disk
     const cart = try Cartridge.loadFromFile(allocator, rom_path);
-    defer cart.deinit(allocator);
 
     // Initialize emulator core
     var emu = try Emulator.init(allocator, cart);
@@ -47,10 +47,10 @@ pub fn main() !void {
                 sdl.SDL_QUIT => quit = true,
                 sdl.SDL_KEYDOWN => {
                     if (ev.key.keysym.sym == sdl.SDLK_ESCAPE) quit = true;
-                    // TODO: map keys to joypad
+                    if (mapKey(&emu, ev.key.keysym.sym, true)) {}
                 },
                 sdl.SDL_KEYUP => {
-                    // TODO: map keys to joypad
+                    _ = mapKey(&emu, ev.key.keysym.sym, false);
                 },
                 else => {},
             }
@@ -69,4 +69,26 @@ pub fn main() !void {
         // Small delay to avoid busy-loop
         sdl.SDL_Delay(1);
     }
+}
+
+fn mapKey(emu: *Emulator, sym: sdl.SDL_Keycode, pressed: bool) bool {
+    const btn = switch (sym) {
+        sdl.SDLK_z => @as(?Joypad.Button, .A),
+        sdl.SDLK_x => @as(?Joypad.Button, .B),
+        sdl.SDLK_RETURN => .Start,
+        sdl.SDLK_RSHIFT => .Select,
+        sdl.SDLK_UP => .Up,
+        sdl.SDLK_DOWN => .Down,
+        sdl.SDLK_LEFT => .Left,
+        sdl.SDLK_RIGHT => .Right,
+        else => null,
+    };
+    if (btn) |b| {
+        if (emu.mmu.joypad.setButton(b, pressed)) {
+            // Request joypad interrupt on press
+            emu.mmu.io[0x0F] |= 1 << 4;
+        }
+        return true;
+    }
+    return false;
 }
